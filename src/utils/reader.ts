@@ -1,4 +1,5 @@
 import Defuddle from 'defuddle/full';
+import { shouldCloseOnBackdropClick } from './backdrop-close';
 import browser from './browser-polyfill';
 import { detectBrowser } from './browser-detection';
 import { flattenShadowDom as flattenShadowDomUtil } from './flatten-shadow-dom';
@@ -1516,6 +1517,15 @@ export class Reader {
 		const overlay = doc.createElement('div');
 		overlay.className = 'obsidian-reader-wtools-overlay';
 
+		const onKeydown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') close();
+		};
+		const close = () => {
+			doc.removeEventListener('keydown', onKeydown, true);
+			overlay.remove();
+		};
+		doc.addEventListener('keydown', onKeydown, true);
+
 		// Create panel
 		const panel = doc.createElement('div');
 		panel.className = 'obsidian-reader-wtools-panel';
@@ -1530,7 +1540,7 @@ export class Reader {
 		const closeBtn = doc.createElement('button');
 		closeBtn.className = 'obsidian-reader-wtools-close';
 		closeBtn.textContent = '×';
-		closeBtn.addEventListener('click', () => overlay.remove());
+		closeBtn.addEventListener('click', () => close());
 
 		header.appendChild(headerTitle);
 		header.appendChild(closeBtn);
@@ -1539,7 +1549,7 @@ export class Reader {
 		const form = doc.createElement('div');
 		form.className = 'obsidian-reader-wtools-form';
 
-		const createField = (label: string, value: string, placeholder: string = ''): HTMLInputElement => {
+		const createField = (label: string, value: string, placeholder: string = '', parent: HTMLElement = form): HTMLInputElement => {
 			const field = doc.createElement('div');
 			field.className = 'obsidian-reader-wtools-field';
 
@@ -1554,21 +1564,29 @@ export class Reader {
 			input.placeholder = placeholder;
 			field.appendChild(input);
 
-			form.appendChild(field);
+			parent.appendChild(field);
 			return input;
 		};
 
 		const titleInput = createField('Title', this.extractedData?.title || '', 'Article title');
-		const authorInput = createField('Author', this.extractedData?.author || '', 'Author name');
+		const authorPubRow = doc.createElement('div');
+		authorPubRow.className = 'obsidian-reader-wtools-row';
+		form.appendChild(authorPubRow);
+		const authorInput = createField('Author', this.extractedData?.author || '', 'Author name', authorPubRow);
 		// Becomes Publication: "[[...]]" in the vault, so it should read like a
 		// publication ("Aeon"), not a hostname — editable because Defuddle's site
 		// metadata is often a tagline or missing entirely.
 		const publicationInput = createField(
 			'Publication',
 			this.extractedData?.site || this.extractedData?.domain || '',
-			'e.g., Aeon'
+			'e.g., Aeon',
+			authorPubRow
 		);
-		const tagsInput = createField('Tags', '', 'leave empty to let W-Tools derive them');
+		const tagsInput = createField('Keywords', '', 'leave empty to let W-Tools derive them');
+
+		const selectRow = doc.createElement('div');
+		selectRow.className = 'obsidian-reader-wtools-row';
+		form.appendChild(selectRow);
 
 		// Destination select
 		const destField = doc.createElement('div');
@@ -1596,7 +1614,7 @@ export class Reader {
 		});
 
 		destField.appendChild(destSelect);
-		form.appendChild(destField);
+		selectRow.appendChild(destField);
 
 		// Summary prompt select
 		const summaryField = doc.createElement('div');
@@ -1623,13 +1641,22 @@ export class Reader {
 		});
 
 		summaryField.appendChild(summarySelect);
-		form.appendChild(summaryField);
+		selectRow.appendChild(summaryField);
 
-		// Server URL
-		const urlInput = createField('W-Tools Server', serverUrl, 'http://localhost:8052');
+		// Connection (server + secret), collapsed once both have saved values
+		const connection = doc.createElement('details');
+		connection.className = 'obsidian-reader-wtools-connection';
+		connection.open = !(wtoolsSettings?.serverUrl && savedSecret);
+		const connectionSummary = doc.createElement('summary');
+		connectionSummary.textContent = 'Connection';
+		connection.appendChild(connectionSummary);
+		const connectionBody = doc.createElement('div');
+		connectionBody.className = 'obsidian-reader-wtools-row';
+		connection.appendChild(connectionBody);
+		form.appendChild(connection);
 
-		// Server Secret
-		const secretInput = createField('Secret', savedSecret, 'Webhook secret (optional)');
+		const urlInput = createField('W-Tools Server', serverUrl, 'http://localhost:8052', connectionBody);
+		const secretInput = createField('Secret', savedSecret, 'Webhook secret (optional)', connectionBody);
 		secretInput.type = 'password';
 
 		// Status area
@@ -1643,7 +1670,7 @@ export class Reader {
 		const cancelBtn = doc.createElement('button');
 		cancelBtn.className = 'obsidian-reader-wtools-btn obsidian-reader-wtools-btn-secondary';
 		cancelBtn.textContent = 'Cancel';
-		cancelBtn.addEventListener('click', () => overlay.remove());
+		cancelBtn.addEventListener('click', () => close());
 
 		const sendBtn = doc.createElement('button');
 		sendBtn.className = 'obsidian-reader-wtools-btn obsidian-reader-wtools-btn-primary';
@@ -1691,7 +1718,7 @@ export class Reader {
 				if (response?.success) {
 					status.textContent = 'Sent successfully!';
 					status.classList.add('success');
-					setTimeout(() => overlay.remove(), 1500);
+					setTimeout(() => close(), 1500);
 				} else {
 					throw new Error(response?.error || 'Unknown error');
 				}
@@ -1713,9 +1740,15 @@ export class Reader {
 		panel.appendChild(actions);
 		overlay.appendChild(panel);
 
-		// Close on overlay click (not panel click)
+		// Close only when the press and release both happened on the backdrop,
+		// so selecting text in a field and releasing outside doesn't close it
+		let mousedownTarget: EventTarget | null = null;
+		overlay.addEventListener('mousedown', (e) => {
+			mousedownTarget = e.target;
+		});
 		overlay.addEventListener('click', (e) => {
-			if (e.target === overlay) overlay.remove();
+			if (shouldCloseOnBackdropClick(overlay, mousedownTarget, e.target)) close();
+			mousedownTarget = null;
 		});
 
 		doc.body.appendChild(overlay);
