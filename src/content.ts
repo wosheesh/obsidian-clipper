@@ -3,6 +3,7 @@ import * as highlighter from './utils/highlighter';
 import { loadSettings, generalSettings } from './utils/storage-utils';
 import Defuddle from 'defuddle';
 import { getDomain } from './utils/string-utils';
+import { getFreshSpaTitle } from './utils/dom-utils';
 import { extractContentBySelector as extractContentBySelectorShared } from './utils/shared';
 import { createMarkdownContent } from 'defuddle/full';
 import { flattenShadowDom } from './utils/flatten-shadow-dom';
@@ -328,7 +329,10 @@ declare global {
 					schemaOrgData: defuddled.schemaOrgData,
 					selectedHtml: selectedHtml,
 					site: defuddled.site,
-					title: defuddled.title,
+					// Same staleness as the reader: on YouTube every title source
+					// Defuddle prefers belongs to the video the tab was opened on,
+					// so a clipped note would be filed under the wrong name.
+					title: getFreshSpaTitle(document, document.URL) || defuddled.title,
 					wordCount: defuddled.wordCount,
 					metaTags: defuddled.metaTags || []
 				};

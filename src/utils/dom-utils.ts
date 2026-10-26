@@ -4,6 +4,50 @@ export function createElementWithClass(tagName: string, className: string): HTML
 	return element;
 }
 
+/**
+ * The page's title as of RIGHT NOW, for SPAs whose metadata goes stale.
+ *
+ * YouTube never re-renders <head> on in-app navigation, so every title source
+ * Defuddle prefers is left behind by the router:
+ *
+ *   - og:title / twitter:title keep the values from the page the tab was
+ *     originally opened on — "YouTube" when you started on the feed, or the
+ *     previously watched clip when you clicked through from another video;
+ *   - ld+json is APPENDED rather than replaced, so the stale VideoObject stays
+ *     first in the document, and that is the one Defuddle's YouTube extractor
+ *     picks (`.find(item => item['@type'] === 'VideoObject')`).
+ *
+ * Verified in the live page: after clicking from video A to video B, og:title
+ * still reported A while document.title and the metadata <h1> reported B.
+ * Those two are the only sources YouTube's router actually updates, which is
+ * why a manual page refresh "fixes" the title.
+ *
+ * Returns null when there is nothing better than what the parser found, so
+ * callers can keep Defuddle's answer for ordinary pages.
+ */
+export function getFreshSpaTitle(doc: Document, url: string): string | null {
+	let host = '';
+	try {
+		host = new URL(url).hostname;
+	} catch {
+		return null;
+	}
+	if (!host.includes('youtube.com') && !host.includes('youtu.be')) return null;
+
+	// The watch page heading, updated by the router on every navigation.
+	const heading = doc.querySelector<HTMLElement>(
+		'h1.ytd-watch-metadata, ytd-watch-metadata h1, #title h1'
+	)?.textContent?.trim();
+	if (heading) return heading;
+
+	// Shorts and other layouts have no such heading — document.title is still
+	// current, it just carries the site suffix Defuddle would have stripped.
+	const docTitle = (doc.title || '').replace(/\s*[|\-–—]\s*YouTube\s*$/, '').trim();
+	if (docTitle && docTitle !== 'YouTube') return docTitle;
+
+	return null;
+}
+
 export function createElementWithHTML(tagName: string, htmlContent: string, attributes: Record<string, string> = {}): HTMLElement {
 	const element = document.createElement(tagName);
 

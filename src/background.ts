@@ -177,7 +177,7 @@ async function sendMessageToPopup(tabId: number, message: any): Promise<void> {
 
 browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime.MessageSender, sendResponse: (response?: any) => void): true | undefined => {
 	if (typeof request === 'object' && request !== null) {
-		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string };
+		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string; url?: string; body?: unknown };
 		
 		if (typedRequest.action === 'copy-to-clipboard' && typedRequest.text) {
 			// Use content script to copy to clipboard
@@ -466,8 +466,37 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			}
 		}
 
+		// W-Tools bridge relay (avoids CORS from content scripts)
+		if (typedRequest.action === "sendToWtools" && typedRequest.url) {
+			(async () => {
+				try {
+					const bodyStr = JSON.stringify(typedRequest.body);
+					const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+					// Sign with HMAC-SHA256 if secret is configured
+					const wtoolsSettings = await browser.storage.local.get('wtools_settings') as any;
+					const secret = wtoolsSettings?.wtools_settings?.secret;
+					if (secret) {
+						const enc = new TextEncoder();
+						const key = await crypto.subtle.importKey(
+							'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+						);
+						const sig = await crypto.subtle.sign('HMAC', key, enc.encode(bodyStr));
+						headers['X-Signature'] = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+					}
+
+					const r = await fetch(typedRequest.url!, { method: "POST", headers, body: bodyStr });
+					const data = await r.json();
+					sendResponse({ success: true, data });
+				} catch (err: any) {
+					sendResponse({ success: false, error: err.message });
+				}
+			})();
+			return true;
+		}
+
 		// For other actions that use sendResponse
-		if (typedRequest.action === "extractContent" || 
+		if (typedRequest.action === "extractContent" ||
 			typedRequest.action === "ensureContentScriptLoaded" ||
 			typedRequest.action === "getHighlighterMode" ||
 			typedRequest.action === "toggleHighlighterMode" ||

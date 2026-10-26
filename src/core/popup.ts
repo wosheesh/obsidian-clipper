@@ -61,8 +61,15 @@ const memoizedGenerateFrontmatter = memoizeWithExpiration(
 );
 
 function getPropertiesFromDOM(): Property[] {
-	return Array.from(document.querySelectorAll('.metadata-property input')).map(input => {
-		const inputElement = input as HTMLInputElement;
+	return Array.from(document.querySelectorAll('.metadata-property input, .metadata-property select')).map(el => {
+		if (el instanceof HTMLSelectElement) {
+			return {
+				id: el.dataset.id || Date.now().toString() + Math.random().toString(36).slice(2, 11),
+				name: el.id,
+				value: el.value
+			};
+		}
+		const inputElement = el as HTMLInputElement;
 		return {
 			id: inputElement.dataset.id || Date.now().toString() + Math.random().toString(36).slice(2, 11),
 			name: inputElement.id,
@@ -757,13 +764,32 @@ function buildTemplateFieldsSkeleton(template: Template | null) {
 			const metadataPropertyValue = document.createElement('div');
 			metadataPropertyValue.className = 'metadata-property-value';
 
-			const inputElement = document.createElement('input');
-			inputElement.id = property.name;
-			inputElement.setAttribute('data-type', propertyType);
-			inputElement.setAttribute('data-template-value', property.value);
-			inputElement.type = propertyType === 'checkbox' ? 'checkbox' : 'text';
-
-			metadataPropertyValue.appendChild(inputElement);
+			if (property.name === 'summary_prompt') {
+				const selectElement = document.createElement('select');
+				selectElement.id = property.name;
+				selectElement.setAttribute('data-type', propertyType);
+				selectElement.setAttribute('data-template-value', property.value);
+				const options = [
+					{ value: 'summary', label: 'Academic (300w abstract, themes, quotes)' },
+					{ value: 'executive', label: 'Executive (brief takeaways)' },
+					{ value: 'research', label: 'Research (source analysis)' },
+				];
+				for (const opt of options) {
+					const optEl = document.createElement('option');
+					optEl.value = opt.value;
+					optEl.textContent = opt.label;
+					selectElement.appendChild(optEl);
+				}
+				selectElement.value = property.value || 'summary';
+				metadataPropertyValue.appendChild(selectElement);
+			} else {
+				const inputElement = document.createElement('input');
+				inputElement.id = property.name;
+				inputElement.setAttribute('data-type', propertyType);
+				inputElement.setAttribute('data-template-value', property.value);
+				inputElement.type = propertyType === 'checkbox' ? 'checkbox' : 'text';
+				metadataPropertyValue.appendChild(inputElement);
+			}
 
 			propertyDiv.appendChild(metadataPropertyKey);
 			propertyDiv.appendChild(metadataPropertyValue);

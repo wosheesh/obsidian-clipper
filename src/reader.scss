@@ -767,6 +767,131 @@
 .theme-dark .obsidian-reader-settings-select {
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23FFF' opacity='0.6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' %3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
 }
+
+// W-Tools integration panel
+.obsidian-reader-wtools-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 1000000000;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.obsidian-reader-wtools-panel {
+	background: var(--obsidian-reader-background-primary);
+	color: var(--obsidian-reader-text-primary);
+	border: 1px solid var(--obsidian-reader-border);
+	border-radius: 12px;
+	padding: 24px;
+	max-width: 480px;
+	width: 90%;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+	font-family: var(--obsidian-reader-font-family);
+}
+.obsidian-reader-wtools-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	h3 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 600;
+	}
+}
+.obsidian-reader-wtools-close {
+	background: none;
+	border: none;
+	color: var(--obsidian-reader-text-muted);
+	font-size: 24px;
+	cursor: pointer;
+	padding: 0 4px;
+	line-height: 1;
+	&:hover {
+		color: var(--obsidian-reader-text-primary);
+	}
+}
+.obsidian-reader-wtools-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.obsidian-reader-wtools-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	label {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--obsidian-reader-text-muted);
+	}
+}
+.obsidian-reader-wtools-input,
+.obsidian-reader-wtools-select {
+	padding: 8px 10px;
+	border: 1px solid var(--obsidian-reader-border);
+	border-radius: 6px;
+	background: var(--obsidian-reader-background-primary-alt);
+	color: var(--obsidian-reader-text-primary);
+	font-size: 14px;
+	font-family: inherit;
+	&:focus {
+		outline: none;
+		border-color: var(--obsidian-reader-color-blue, #7c3aed);
+	}
+}
+.obsidian-reader-wtools-select {
+	appearance: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+.obsidian-reader-wtools-status {
+	min-height: 20px;
+	font-size: 13px;
+	text-align: center;
+	&.success {
+		color: var(--obsidian-reader-color-green, #22c55e);
+	}
+	&.error {
+		color: var(--obsidian-reader-color-red, #ef4444);
+	}
+}
+.obsidian-reader-wtools-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+.obsidian-reader-wtools-btn {
+	padding: 8px 20px;
+	border: none;
+	border-radius: 6px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: opacity 0.15s;
+	&:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+}
+.obsidian-reader-wtools-btn-primary {
+	background: var(--obsidian-reader-color-blue, #7c3aed);
+	color: #fff;
+	&:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+}
+.obsidian-reader-wtools-btn-secondary {
+	background: var(--obsidian-reader-background-primary-alt);
+	color: var(--obsidian-reader-text-primary);
+	border: 1px solid var(--obsidian-reader-border);
+	&:hover:not(:disabled) {
+		background: var(--obsidian-reader-background-primary);
+	}
+}
+
 .obsidian-reader-container {
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;

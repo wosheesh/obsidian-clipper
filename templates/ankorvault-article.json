@@ -1,0 +1,66 @@
+{
+	"schemaVersion": "0.1.0",
+	"name": "Article (AnkorVault)",
+	"behavior": "create",
+	"noteContentFormat": "{{content}}",
+	"properties": [
+		{
+			"name": "Title",
+			"value": "{{title}}",
+			"type": "text"
+		},
+		{
+			"name": "Authors",
+			"value": "{{author|split:\", \"|wikilink|join}}",
+			"type": "multitext"
+		},
+		{
+			"name": "Type",
+			"value": "Article",
+			"type": "multitext"
+		},
+		{
+			"name": "Year of Publication",
+			"value": "{{published|date:\"YYYY\"}}",
+			"type": "text"
+		},
+		{
+			"name": "Publication",
+			"value": "{{site|wikilink}}",
+			"type": "text"
+		},
+		{
+			"name": "Vol",
+			"value": "",
+			"type": "text"
+		},
+		{
+			"name": "Pages",
+			"value": "",
+			"type": "text"
+		},
+		{
+			"name": "tags",
+			"value": "",
+			"type": "multitext"
+		},
+		{
+			"name": "aliases",
+			"value": "",
+			"type": "multitext"
+		},
+		{
+			"name": "Link",
+			"value": "{{url}}",
+			"type": "text"
+		},
+		{
+			"name": "date_created",
+			"value": "{{date}}",
+			"type": "text"
+		}
+	],
+	"triggers": [],
+	"noteNameFormat": "{{title}}",
+	"path": "03 Resources/Web Clippings"
+}

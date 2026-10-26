@@ -5,6 +5,7 @@ import { flattenShadowDom as flattenShadowDomUtil } from './flatten-shadow-dom';
 import { getLocalStorage, setLocalStorage } from './storage-utils';
 import hljs from 'highlight.js';
 import { getDomain } from './string-utils';
+import { getFreshSpaTitle } from './dom-utils';
 import { applyHighlights } from './highlighter';
 import { copyToClipboard } from './clipboard-utils';
 
@@ -87,6 +88,17 @@ export class Reader {
 		theme: 'default',
 		themeMode: 'auto'
 	};
+
+	private static extractedData: {
+		content: string;
+		title?: string;
+		author?: string;
+		published?: string;
+		domain?: string;
+		site?: string;
+		wordCount?: number;
+		url?: string;
+	} | null = null;
 
 	private static async loadSettings(): Promise<void> {
 		const savedSettings = await getLocalStorage('reader_settings');
@@ -235,12 +247,29 @@ export class Reader {
 
 		highlighterGroup.appendChild(highlighterBtn);
 
+		// W-Tools send button
+		const wtoolsGroup = doc.createElement('div');
+		wtoolsGroup.className = 'obsidian-reader-settings-controls-group';
+
+		const wtoolsBtn = doc.createElement('button');
+		wtoolsBtn.className = 'obsidian-reader-settings-button';
+		wtoolsBtn.dataset.action = 'send-to-wtools';
+		wtoolsBtn.title = 'Send to W-Tools';
+		wtoolsBtn.appendChild(this.createSVG({
+			width: '20', height: '20', viewBox: '0 0 24 24',
+			className: 'lucide lucide-upload-icon',
+			paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12']
+		}));
+
+		wtoolsGroup.appendChild(wtoolsBtn);
+
 		// Assemble everything
 		controlsContainer.appendChild(fontGroup);
 		controlsContainer.appendChild(widthGroup);
 		controlsContainer.appendChild(lineHeightGroup);
 		controlsContainer.appendChild(themeSelect);
 		controlsContainer.appendChild(themeModeSelect);
+		controlsContainer.appendChild(wtoolsGroup);
 
 		settingsBar.appendChild(controlsContainer);
 
@@ -279,6 +308,9 @@ export class Reader {
 					break;
 				case 'increase-line-height':
 					this.updateLineHeight(doc, parseFloat(style.getPropertyValue('--obsidian-reader-line-height')) + 0.1);
+					break;
+				case 'send-to-wtools':
+					this.showWtoolsPanel(doc);
 					break;
 			}
 		});
@@ -356,6 +388,7 @@ export class Reader {
 		author?: string;
 		published?: string;
 		domain?: string;
+		site?: string;
 		wordCount?: number;
 		parseTime?: number;
 		extractorType?: string;
@@ -370,6 +403,9 @@ export class Reader {
 			author: defuddled.author,
 			published: defuddled.published,
 			domain: getDomain(doc.URL),
+			// Publisher name ("Aeon"), not the hostname — this becomes the
+			// Publication wikilink in the vault's Article frontmatter.
+			site: defuddled.site,
 			wordCount: defuddled.wordCount,
 			parseTime: defuddled.parseTime
 		};
@@ -1097,6 +1133,11 @@ export class Reader {
 				}
 			}
 
+			// Read the title off the LIVE document, for the same reason: the
+			// sources Defuddle prefers are stale on an SPA, and the clone it
+			// parses is taken after cleanup. See getFreshSpaTitle.
+			const liveTitle = getFreshSpaTitle(doc, doc.URL);
+
 			// Flatten shadow DOM content before cleanup removes scripts
 			await flattenShadowDomUtil(doc);
 
@@ -1235,7 +1276,14 @@ export class Reader {
 			this.isActive = true;
 
 			// Now await content extraction and populate the page
-			const { content, title, author, published, domain, extractorType, wordCount, parseTime } = await contentPromise;
+			const { content, title: parsedTitle, author, published, domain, site, extractorType, wordCount, parseTime } = await contentPromise;
+
+			// The live-DOM title wins where it exists — on YouTube the parsed one
+			// is whatever video the tab was opened on, not the one being read.
+			const title = liveTitle || parsedTitle;
+
+			// Store extracted data for W-Tools integration
+			this.extractedData = { content: content || '', title, author, published, domain, site, wordCount, url: doc.URL };
 
 			// If reader was toggled off while waiting, abort
 			if (!this.isActive) return;
@@ -1443,12 +1491,238 @@ export class Reader {
 				outline.remove();
 			}
 			this.isActive = false;
+			this.extractedData = null;
 
 			// Reapply highlights after restoring original content
 			if (typeof window !== 'undefined' && window.hasOwnProperty('applyHighlights')) {
 				(window as any).applyHighlights();
 			}
 		}
+	}
+
+	private static async showWtoolsPanel(doc: Document): Promise<void> {
+		// Load saved wtools settings
+		const wtoolsSettings = await getLocalStorage('wtools_settings') as {
+			serverUrl?: string;
+			defaultDestination?: string;
+			secret?: string;
+		} | null;
+
+		const serverUrl = wtoolsSettings?.serverUrl || 'http://localhost:8052';
+		const defaultDestination = wtoolsSettings?.defaultDestination || '03 Resources/Web Clippings';
+		const savedSecret = wtoolsSettings?.secret || '';
+
+		// Create overlay
+		const overlay = doc.createElement('div');
+		overlay.className = 'obsidian-reader-wtools-overlay';
+
+		// Create panel
+		const panel = doc.createElement('div');
+		panel.className = 'obsidian-reader-wtools-panel';
+
+		// Header
+		const header = doc.createElement('div');
+		header.className = 'obsidian-reader-wtools-header';
+
+		const headerTitle = doc.createElement('h3');
+		headerTitle.textContent = 'Send to W-Tools';
+
+		const closeBtn = doc.createElement('button');
+		closeBtn.className = 'obsidian-reader-wtools-close';
+		closeBtn.textContent = '×';
+		closeBtn.addEventListener('click', () => overlay.remove());
+
+		header.appendChild(headerTitle);
+		header.appendChild(closeBtn);
+
+		// Form fields
+		const form = doc.createElement('div');
+		form.className = 'obsidian-reader-wtools-form';
+
+		const createField = (label: string, value: string, placeholder: string = ''): HTMLInputElement => {
+			const field = doc.createElement('div');
+			field.className = 'obsidian-reader-wtools-field';
+
+			const lbl = doc.createElement('label');
+			lbl.textContent = label;
+			field.appendChild(lbl);
+
+			const input = doc.createElement('input');
+			input.type = 'text';
+			input.className = 'obsidian-reader-wtools-input';
+			input.value = value;
+			input.placeholder = placeholder;
+			field.appendChild(input);
+
+			form.appendChild(field);
+			return input;
+		};
+
+		const titleInput = createField('Title', this.extractedData?.title || '', 'Article title');
+		const authorInput = createField('Author', this.extractedData?.author || '', 'Author name');
+		// Becomes Publication: "[[...]]" in the vault, so it should read like a
+		// publication ("Aeon"), not a hostname — editable because Defuddle's site
+		// metadata is often a tagline or missing entirely.
+		const publicationInput = createField(
+			'Publication',
+			this.extractedData?.site || this.extractedData?.domain || '',
+			'e.g., Aeon'
+		);
+		const tagsInput = createField('Tags', '', 'leave empty to let W-Tools derive them');
+
+		// Destination select
+		const destField = doc.createElement('div');
+		destField.className = 'obsidian-reader-wtools-field';
+
+		const destLabel = doc.createElement('label');
+		destLabel.textContent = 'Destination';
+		destField.appendChild(destLabel);
+
+		const destSelect = doc.createElement('select');
+		destSelect.className = 'obsidian-reader-wtools-select';
+
+		const destinations = [
+			'03 Resources/Web Clippings',
+			'03 Resources/Articles, Research Papers, Book Chapters',
+			'0PA/0PA_Inbox'
+		];
+
+		destinations.forEach(dest => {
+			const option = doc.createElement('option');
+			option.value = dest;
+			option.textContent = dest.split('/').pop() || dest;
+			if (dest === defaultDestination) option.selected = true;
+			destSelect.appendChild(option);
+		});
+
+		destField.appendChild(destSelect);
+		form.appendChild(destField);
+
+		// Summary prompt select
+		const summaryField = doc.createElement('div');
+		summaryField.className = 'obsidian-reader-wtools-field';
+
+		const summaryLabel = doc.createElement('label');
+		summaryLabel.textContent = 'Summary Prompt';
+		summaryField.appendChild(summaryLabel);
+
+		const summarySelect = doc.createElement('select');
+		summarySelect.className = 'obsidian-reader-wtools-select';
+
+		const summaryOptions = [
+			{ value: 'summary', label: 'Academic (300w abstract, themes, quotes)' },
+			{ value: 'executive', label: 'Executive (brief takeaways)' },
+			{ value: 'research', label: 'Research (source analysis)' },
+		];
+
+		summaryOptions.forEach(opt => {
+			const option = doc.createElement('option');
+			option.value = opt.value;
+			option.textContent = opt.label;
+			summarySelect.appendChild(option);
+		});
+
+		summaryField.appendChild(summarySelect);
+		form.appendChild(summaryField);
+
+		// Server URL
+		const urlInput = createField('W-Tools Server', serverUrl, 'http://localhost:8052');
+
+		// Server Secret
+		const secretInput = createField('Secret', savedSecret, 'Webhook secret (optional)');
+		secretInput.type = 'password';
+
+		// Status area
+		const status = doc.createElement('div');
+		status.className = 'obsidian-reader-wtools-status';
+
+		// Action buttons
+		const actions = doc.createElement('div');
+		actions.className = 'obsidian-reader-wtools-actions';
+
+		const cancelBtn = doc.createElement('button');
+		cancelBtn.className = 'obsidian-reader-wtools-btn obsidian-reader-wtools-btn-secondary';
+		cancelBtn.textContent = 'Cancel';
+		cancelBtn.addEventListener('click', () => overlay.remove());
+
+		const sendBtn = doc.createElement('button');
+		sendBtn.className = 'obsidian-reader-wtools-btn obsidian-reader-wtools-btn-primary';
+		sendBtn.textContent = 'Send';
+		sendBtn.addEventListener('click', async () => {
+			sendBtn.disabled = true;
+			sendBtn.textContent = 'Sending...';
+			status.textContent = '';
+			status.className = 'obsidian-reader-wtools-status';
+
+			try {
+				// Save settings for next time
+				await setLocalStorage('wtools_settings', {
+					serverUrl: urlInput.value,
+					defaultDestination: destSelect.value,
+					secret: secretInput.value
+				});
+
+				const response = await browser.runtime.sendMessage({
+					action: 'sendToWtools',
+					url: `${urlInput.value}/bridge`,
+					body: {
+						id: crypto.randomUUID(),
+						type: 'workflow',
+						name: 'archive_web_clipping',
+						params: {
+							input: this.extractedData?.content || ''
+						},
+						workflow_params: {
+							title: titleInput.value,
+							author: authorInput.value,
+							tags: tagsInput.value,
+							source_url: this.extractedData?.url || '',
+							source_domain: this.extractedData?.domain || '',
+							publication: publicationInput.value,
+							published: this.extractedData?.published || '',
+							word_count: this.extractedData?.wordCount || 0,
+							destination: destSelect.value,
+							summary_prompt: summarySelect.value
+						},
+						source: 'obsidian-clipper-reader'
+					}
+				}) as { success?: boolean; error?: string };
+
+				if (response?.success) {
+					status.textContent = 'Sent successfully!';
+					status.classList.add('success');
+					setTimeout(() => overlay.remove(), 1500);
+				} else {
+					throw new Error(response?.error || 'Unknown error');
+				}
+			} catch (err: any) {
+				status.textContent = `Error: ${err.message}`;
+				status.classList.add('error');
+				sendBtn.disabled = false;
+				sendBtn.textContent = 'Send';
+			}
+		});
+
+		actions.appendChild(cancelBtn);
+		actions.appendChild(sendBtn);
+
+		// Assemble panel
+		panel.appendChild(header);
+		panel.appendChild(form);
+		panel.appendChild(status);
+		panel.appendChild(actions);
+		overlay.appendChild(panel);
+
+		// Close on overlay click (not panel click)
+		overlay.addEventListener('click', (e) => {
+			if (e.target === overlay) overlay.remove();
+		});
+
+		doc.body.appendChild(overlay);
+
+		// Focus title input
+		titleInput.focus();
+		titleInput.select();
 	}
 
 	static async toggle(doc: Document): Promise<boolean> {

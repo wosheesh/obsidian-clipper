@@ -119,14 +119,22 @@ export function createDefaultTemplate(): Template {
 		path: 'Clippings',
 		noteContentFormat: '{{content}}',
 		context: "",
+		// AnkorVault Article schema — same field names and order the journals
+		// pipeline and the dataviewjs APA script use, so a clipped article is
+		// queryable and citable exactly like a scanned one. Keep in sync with
+		// wtools ankor.tools.tool_build_article_frontmatter.
 		properties: [
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'title', value: '{{title}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'source', value: '{{url}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'author', value: '{{author|split:", "|wikilink|join}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'published', value: '{{published}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'created', value: '{{date}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'description', value: '{{description}}' },
-			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'tags', value: 'clippings' }
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Title', value: '{{title}}' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Authors', value: '{{author|split:", "|wikilink|join}}' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Type', value: 'Article' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Year of Publication', value: '{{published|date:"YYYY"}}' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Publication', value: '{{site|wikilink}}' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Vol', value: '' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Pages', value: '' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'tags', value: '' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'aliases', value: '' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'Link', value: '{{url}}' },
+			{ id: Date.now().toString() + Math.random().toString(36).slice(2, 11), name: 'date_created', value: '{{date}}' }
 		],
 		triggers: []
 	};
@@ -216,7 +224,21 @@ async function updateGlobalPropertyTypes(templates: Template[]): Promise<void> {
 		'published': { type: 'date', defaultValue: '{{published}}' },
 		'created': { type: 'date', defaultValue: '{{date}}' },
 		'description': { type: 'text', defaultValue: '{{description}}' },
-		'tags': { type: 'multitext', defaultValue: 'clippings' }
+		'tags': { type: 'multitext', defaultValue: '' },
+		// AnkorVault Article schema (see createDefaultTemplate). Dates stay 'text'
+		// so they serialise quoted, the way the rest of the vault stores them.
+		'Title': { type: 'text', defaultValue: '{{title}}' },
+		'Authors': { type: 'multitext', defaultValue: '{{author|split:", "|wikilink|join}}' },
+		'Type': { type: 'multitext', defaultValue: 'Article' },
+		'Year of Publication': { type: 'text', defaultValue: '{{published|date:"YYYY"}}' },
+		'Publication': { type: 'text', defaultValue: '{{site|wikilink}}' },
+		'Vol': { type: 'text', defaultValue: '' },
+		'No.': { type: 'text', defaultValue: '' },
+		'Pages': { type: 'text', defaultValue: '' },
+		'DOI': { type: 'text', defaultValue: '' },
+		'aliases': { type: 'multitext', defaultValue: '' },
+		'Link': { type: 'text', defaultValue: '{{url}}' },
+		'date_created': { type: 'text', defaultValue: '{{date}}' }
 	};
 
 	templates.forEach(template => {
