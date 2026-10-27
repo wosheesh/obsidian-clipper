@@ -127,6 +127,29 @@
 								<input type="text" id="vault-input" data-i18n="addVaultPlaceholder" placeholder="Press enter to add a vault" autocomplete="off" spellcheck="false" />
 								<ul id="vault-list"></ul>
 							</div>
+							<div id="wtools-subsection">
+								<h3>W-Tools</h3>
+								<div class="setting-item-description">Send to W-Tools (reader view) queues the page in wtools Ingest. The clip token stays in the extension; it is never put into a web page.</div>
+								<div class="setting-item">
+									<div class="setting-item-info">
+										<label for="wtools-server-url">Server</label>
+										<div class="setting-item-description">Loopback only: http://127.0.0.1:&lt;port&gt; or http://localhost:&lt;port&gt;.</div>
+									</div>
+									<div class="setting-item-control">
+										<input type="text" id="wtools-server-url" placeholder="http://127.0.0.1:8052" autocomplete="off" spellcheck="false" />
+									</div>
+								</div>
+								<div class="setting-item">
+									<div class="setting-item-info">
+										<label for="wtools-clip-token">Ingest clip token</label>
+										<div class="setting-item-description">WTOOLS_INGEST_CLIP_TOKEN from wtools. It opens Ingest only.</div>
+									</div>
+									<div class="setting-item-control">
+										<input type="password" id="wtools-clip-token" autocomplete="off" spellcheck="false" />
+									</div>
+								</div>
+								<div class="setting-item-description" id="wtools-settings-status"></div>
+							</div>
 							<div id="hotkeys-subsection">
 								<h3 data-i18n="hotkeys">Hotkeys</h3>
 								<div class="setting-item-description shortcut-instructions">

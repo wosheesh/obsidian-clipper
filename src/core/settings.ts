@@ -11,6 +11,7 @@ import {
 } from '../managers/template-manager';
 import { updateTemplateList, showTemplateEditor, initializeAddPropertyButton, initializeTemplateValidation } from '../managers/template-ui';
 import { initializeGeneralSettings } from '../managers/general-settings';
+import { initializeWtoolsSettings } from '../managers/wtools-settings';
 import { initializeInterpreterSettings } from '../managers/interpreter-settings';
 import { showSettingsSection, initializeSidebar } from '../managers/settings-section-ui';
 import { initializeReaderSettings } from '../managers/reader-settings';
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 			await translatePage();
 			
 			await initializeGeneralSettings();
+			await initializeWtoolsSettings().catch(error => console.error('Error initializing W-Tools settings:', error));
 			await initializeReaderSettings();
 			
 			// Initialize interpreter settings with error handling

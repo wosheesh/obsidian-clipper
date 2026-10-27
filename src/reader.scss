@@ -828,15 +828,6 @@
 .obsidian-reader-wtools-field {
 	min-width: 0;
 }
-.obsidian-reader-wtools-connection {
-	summary {
-		cursor: pointer;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--obsidian-reader-text-muted);
-		margin-bottom: 6px;
-	}
-}
 .obsidian-reader-wtools-field {
 	display: flex;
 	flex-direction: column;
@@ -845,6 +836,14 @@
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--obsidian-reader-text-muted);
+	}
+}
+.obsidian-reader-wtools-field-checkbox {
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	label {
+		cursor: pointer;
 	}
 }
 .obsidian-reader-wtools-input,
