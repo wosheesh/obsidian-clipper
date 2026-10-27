@@ -3,8 +3,21 @@ import { detectBrowser } from './utils/browser-detection';
 import { updateCurrentActiveTab, isValidUrl, isBlankPage } from './utils/active-tab-manager';
 import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
+import { normalizeWtoolsSettings, relayClipRequest, WTOOLS_SETTINGS_KEY, WtoolsSettings } from './utils/wtools-clip';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
+
+// W-Tools settings, dropping keys left by the old /bridge panel (its webhook
+// secret is not reused; wosheesh/wtools#1660).
+async function loadWtoolsSettings(): Promise<WtoolsSettings> {
+	const stored = await browser.storage.local.get(WTOOLS_SETTINGS_KEY);
+	const { settings, hasLegacyKeys } = normalizeWtoolsSettings(stored[WTOOLS_SETTINGS_KEY]);
+	if (hasLegacyKeys) {
+		await browser.storage.local.set({ [WTOOLS_SETTINGS_KEY]: settings });
+	}
+	return settings;
+}
+loadWtoolsSettings().catch(err => console.error('W-Tools settings migration failed:', err));
 
 // Firefox: always-active webRequest listener to rewrite Referer on YouTube embeds.
 // Chrome MV3 doesn't support blocking webRequest, so this is a no-op there.
@@ -177,7 +190,7 @@ async function sendMessageToPopup(tabId: number, message: any): Promise<void> {
 
 browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime.MessageSender, sendResponse: (response?: any) => void): true | undefined => {
 	if (typeof request === 'object' && request !== null) {
-		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string; url?: string; body?: unknown };
+		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string };
 		
 		if (typedRequest.action === 'copy-to-clipboard' && typedRequest.text) {
 			// Use content script to copy to clipboard
@@ -466,32 +479,19 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			}
 		}
 
-		// W-Tools bridge relay (avoids CORS from content scripts)
-		if (typedRequest.action === "sendToWtools" && typedRequest.url) {
+		// W-Tools Ingest clip relay (wosheesh/wtools#1660). The token is read and
+		// added here only; the destination comes from the options, never the message.
+		if (typedRequest.action === "wtoolsClip") {
+			if (sender.id !== browser.runtime.id) {
+				sendResponse({ ok: false, status: 0, error: 'Refused: not from this extension.' });
+				return true;
+			}
 			(async () => {
-				try {
-					const bodyStr = JSON.stringify(typedRequest.body);
-					const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-					// Sign with HMAC-SHA256 if secret is configured
-					const wtoolsSettings = await browser.storage.local.get('wtools_settings') as any;
-					const secret = wtoolsSettings?.wtools_settings?.secret;
-					if (secret) {
-						const enc = new TextEncoder();
-						const key = await crypto.subtle.importKey(
-							'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-						);
-						const sig = await crypto.subtle.sign('HMAC', key, enc.encode(bodyStr));
-						headers['X-Signature'] = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-					}
-
-					const r = await fetch(typedRequest.url!, { method: "POST", headers, body: bodyStr });
-					const data = await r.json();
-					sendResponse({ success: true, data });
-				} catch (err: any) {
-					sendResponse({ success: false, error: err.message });
-				}
-			})();
+				const settings = await loadWtoolsSettings();
+				sendResponse(await relayClipRequest(request as Record<string, unknown>, settings, fetch.bind(globalThis)));
+			})().catch((err: unknown) => {
+				sendResponse({ ok: false, status: 0, error: err instanceof Error ? err.message : String(err) });
+			});
 			return true;
 		}
 
