@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { parseHTML } from 'linkedom';
 import {
 	DEFAULT_WTOOLS_SERVER,
+	buildClipMetadata,
+	splitAuthors,
 	describeClipResult,
 	normalizeWtoolsSettings,
 	parseClipQuestions,
@@ -226,5 +228,51 @@ describe('describeClipResult', () => {
 			.toBe('W-Tools error 400: unknown answer: foo');
 		expect(describeClipResult({ ok: false, status: 0, error: 'Could not reach W-Tools' }).message).toBe('Could not reach W-Tools');
 		expect(describeClipResult(undefined).ok).toBe(false);
+	});
+});
+
+describe('clip metadata', () => {
+	test('builder maps author, published and site, omitting empty values', () => {
+		expect(buildClipMetadata({ author: 'Ann Example', published: '2026-01-02', site: 'Example Times' })).toEqual({
+			authors: ['Ann Example'], published: '2026-01-02', publication: 'Example Times',
+		});
+		expect(buildClipMetadata({ author: '  ', published: '', site: undefined })).toBeUndefined();
+		expect(buildClipMetadata(null)).toBeUndefined();
+	});
+
+	test('splits only on clear separators', () => {
+		expect(splitAuthors('Ann Example, PhD')).toEqual(['Ann Example, PhD']);
+		expect(splitAuthors('Ann Example and Bob Sample')).toEqual(['Ann Example', 'Bob Sample']);
+		expect(splitAuthors('Ann Example & Bob Sample; Cy Test')).toEqual(['Ann Example', 'Bob Sample', 'Cy Test']);
+		expect(splitAuthors('Alexander Anderson')).toEqual(['Alexander Anderson']);
+	});
+
+	test('builder enforces limits', () => {
+		const many = Array.from({ length: 12 }, (_, i) => `Author ${i}`).join('; ');
+		const m = buildClipMetadata({ author: many, published: 'x'.repeat(100), site: 's'.repeat(300) })!;
+		expect(m.authors).toHaveLength(10);
+		expect(m.published).toHaveLength(64);
+		expect(m.publication).toHaveLength(200);
+	});
+
+	const base = { text: 't', source_url: 'u', title: 'T', answers: {} };
+	async function sent(metadata: unknown) {
+		const fetchFn = fakeFetch();
+		await relayClipRequest({ action: 'wtoolsClip', op: 'submit', payload: { ...base, metadata } }, settings, fetchFn as any);
+		return JSON.parse(fetchFn.mock.calls[0][1]?.body as string);
+	}
+
+	test('relay forwards valid metadata and drops unknown keys', async () => {
+		const body = await sent({ authors: ['Ann'], published: '2026', publication: 'P', extra: 1 });
+		expect(body.metadata).toEqual({ authors: ['Ann'], published: '2026', publication: 'P' });
+	});
+
+	test('relay drops invalid or over-limit values and absent metadata', async () => {
+		expect((await sent({ authors: 'Ann', published: 5, publication: 'p'.repeat(201) })).metadata).toBeUndefined();
+		expect((await sent({ authors: Array(11).fill('a'), published: 'ok' })).metadata).toEqual({ published: 'ok' });
+		expect((await sent('nope')).metadata).toBeUndefined();
+		const fetchFn = fakeFetch();
+		await relayClipRequest({ action: 'wtoolsClip', op: 'submit', payload: base }, settings, fetchFn as any);
+		expect(JSON.parse(fetchFn.mock.calls[0][1]?.body as string)).toEqual(base);
 	});
 });

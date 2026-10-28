@@ -57,6 +57,62 @@ export interface ClipSubmitPayload {
 	source_url: string;
 	title: string;
 	answers: Record<string, unknown>;
+	metadata?: ClipMetadata;
+}
+
+/** Page metadata for Ingest to prefill (wosheesh/wtools#1684). Limits match the server. */
+export interface ClipMetadata {
+	authors?: string[];
+	published?: string;
+	publication?: string;
+}
+
+const MAX_AUTHORS = 10;
+const MAX_AUTHOR_CHARS = 200;
+const MAX_PUBLISHED_CHARS = 64;
+const MAX_PUBLICATION_CHARS = 200;
+
+function cleanString(value: unknown, max: number): string {
+	return typeof value === 'string' ? value.trim().slice(0, max) : '';
+}
+
+/** Split a byline only on clear multi-author separators; "Name, PhD" stays whole. */
+export function splitAuthors(byline: string): string[] {
+	return byline
+		.split(/\s+and\s+|\s+&\s+|;/)
+		.map(name => name.trim().slice(0, MAX_AUTHOR_CHARS))
+		.filter(Boolean)
+		.slice(0, MAX_AUTHORS);
+}
+
+/** Metadata from the extracted page fields; empty values are omitted. Undefined when nothing is left. */
+export function buildClipMetadata(data: { author?: string; published?: string; site?: string } | null | undefined): ClipMetadata | undefined {
+	if (!data) return undefined;
+	const metadata: ClipMetadata = {};
+	const authors = typeof data.author === 'string' ? splitAuthors(data.author) : [];
+	if (authors.length) metadata.authors = authors;
+	const published = cleanString(data.published, MAX_PUBLISHED_CHARS);
+	if (published) metadata.published = published;
+	const publication = cleanString(data.site, MAX_PUBLICATION_CHARS);
+	if (publication) metadata.publication = publication;
+	return Object.keys(metadata).length ? metadata : undefined;
+}
+
+/** Keep only the known keys that meet the limits; undefined when nothing is left. */
+function validMetadata(raw: unknown): ClipMetadata | undefined {
+	if (!isPlainObject(raw)) return undefined;
+	const metadata: ClipMetadata = {};
+	if (Array.isArray(raw.authors) && raw.authors.length <= MAX_AUTHORS
+		&& raw.authors.every(a => typeof a === 'string' && a.trim() && a.length <= MAX_AUTHOR_CHARS)) {
+		metadata.authors = raw.authors as string[];
+	}
+	if (typeof raw.published === 'string' && raw.published && raw.published.length <= MAX_PUBLISHED_CHARS) {
+		metadata.published = raw.published;
+	}
+	if (typeof raw.publication === 'string' && raw.publication && raw.publication.length <= MAX_PUBLICATION_CHARS) {
+		metadata.publication = raw.publication;
+	}
+	return Object.keys(metadata).length ? metadata : undefined;
 }
 
 export interface ClipRelayResponse {
@@ -78,7 +134,8 @@ function validSubmitPayload(payload: unknown): ClipSubmitPayload | null {
 	const { text, source_url, title, answers } = payload;
 	if (typeof text !== 'string' || typeof source_url !== 'string' || typeof title !== 'string') return null;
 	if (!isPlainObject(answers)) return null;
-	return { text, source_url, title, answers };
+	const metadata = validMetadata(payload.metadata);
+	return metadata ? { text, source_url, title, answers, metadata } : { text, source_url, title, answers };
 }
 
 /**
