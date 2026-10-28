@@ -9,7 +9,7 @@ import { getDomain } from './string-utils';
 import { getFreshSpaTitle } from './dom-utils';
 import { applyHighlights } from './highlighter';
 import { copyToClipboard } from './clipboard-utils';
-import { ClipRelayResponse, describeClipResult, parseClipQuestions, renderClipQuestions } from './wtools-clip';
+import { ClipRelayResponse, buildClipMetadata, describeClipResult, parseClipQuestions, renderClipQuestions } from './wtools-clip';
 
 // Mobile viewport settings
 const VIEWPORT = 'width=device-width, initial-scale=1, maximum-scale=1';
@@ -1621,6 +1621,7 @@ export class Reader {
 					finish('The page is too large for Ingest.', false);
 					return;
 				}
+				const metadata = buildClipMetadata(this.extractedData);
 				const response = await browser.runtime.sendMessage({
 					action: 'wtoolsClip',
 					op: 'submit',
@@ -1628,7 +1629,8 @@ export class Reader {
 						text,
 						source_url: url,
 						title: titleInput.value.trim(),
-						answers: readAnswers()
+						answers: readAnswers(),
+						...(metadata ? { metadata } : {})
 					}
 				}) as ClipRelayResponse;
 				const result = describeClipResult(response);
